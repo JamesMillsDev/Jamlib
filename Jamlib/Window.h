@@ -1,14 +1,19 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include "Maths/Color.h"
 
+using std::function;
 using std::shared_ptr;
 using std::unique_ptr;
 using std::weak_ptr;
 
 using Gdiplus::Graphics;
+
+typedef function<void(float)> UpdateFnc;
+typedef function<void(Graphics*)> RenderFnc;
 
 namespace Jamlib
 {
@@ -27,12 +32,12 @@ namespace Jamlib
 		};
 
 	public:
-		static void Create(int w, int h, const char* title, Color clrColor);
+		static void Create(int w, int h, const char* title, Color clrColor, UpdateFnc updateFnc, RenderFnc renderFnc);
 
-		static shared_ptr<Window> Instance();
+		static weak_ptr<Window> Instance();
 
 	public:
-		Window(PrivateKey, int w, int h, const char* title, Color clrColor);
+		Window(PrivateKey, int w, int h, const char* title, Color clrColor, const UpdateFnc& updateFnc, const RenderFnc& renderFnc);
 		~Window();
 
 		Window(const Window&) = delete;
@@ -53,7 +58,10 @@ namespace Jamlib
 		Window& operator=(Window&&) = delete;
 
 	private:
-		static unique_ptr<Window, Deleter> m_instance;
+		static shared_ptr<Window> m_instance;
+
+	private:
+		static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	private:
 		int m_width;
@@ -64,7 +72,13 @@ namespace Jamlib
 		HWND m_hwnd;
 		HDC m_hdc;
 		PAINTSTRUCT m_ps;
+		ULONG_PTR m_gdiPlusToken;
 		Graphics* m_graphics;
+
+		UpdateFnc m_update;
+		RenderFnc m_render;
+
+	private:
 
 	};
 }

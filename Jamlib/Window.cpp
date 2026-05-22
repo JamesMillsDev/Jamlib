@@ -4,54 +4,36 @@ using Gdiplus::GdiplusStartupInput;
 
 namespace Jamlib
 {
-	unique_ptr<Window, Window::Deleter> Window::m_instance;
-
-	LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-	{
-		switch (uMsg)
-		{
-			case WM_PAINT:
-			{
-
-				return 0;
-			}
-
-			case WM_DESTROY:
-			{
-				PostQuitMessage(0); 
-				return 0;
-			}
-
-			default: return DefWindowProc(hwnd, uMsg, wParam, lParam);
-		}
-	}
+	shared_ptr<Window> Window::m_instance;
 
 	void Window::Deleter::operator()(Window* window) const
 	{
 		delete window;
 	}
 
-	void Window::Create(int w, int h, const char* title, Color clrColor)
+	void Window::Create(const int w, const int h, const char* title, const Color clrColor, UpdateFnc updateFnc, RenderFnc renderFnc)
 	{
 		if (m_instance)
 		{
 			return;
 		}
 
-		m_instance = unique_ptr<Window, Deleter>(new Window{ PrivateKey{}, w, h, title, clrColor }, Deleter{});
+		m_instance = shared_ptr<Window>(new Window{ PrivateKey{}, w, h, title, clrColor, updateFnc, renderFnc }, Deleter{});
 	}
 
-	shared_ptr<Window> Window::Instance()
+	weak_ptr<Window> Window::Instance()
 	{
-		return shared_ptr<Window>(m_instance.get());
+		return m_instance;
 	}
 
-	Window::Window(PrivateKey, const int w, const int h, const char* title, const Color clrColor) :
+	Window::Window(PrivateKey, const int w, const int h, const char* title, const Color clrColor, const UpdateFnc& updateFnc, const RenderFnc& renderFnc) :
 		m_width{ w }, m_height{ h }, m_title{ new wchar_t[strlen(title) + 1] },
-		m_clrColor{ clrColor }, m_hwnd{ nullptr }, m_hdc{ nullptr }, m_ps{},
-		m_graphics{ nullptr }
+		m_clrColor{ clrColor }, m_hwnd{ nullptr }, m_hdc{ nullptr }, m_ps{ }, m_gdiPlusToken{ 0 },
+		m_graphics{ nullptr }, m_update{ updateFnc }, m_render{ renderFnc }
 	{
-		MultiByteToWideChar(CP_UTF8, 0, title, -1, m_title, static_cast<int>(strlen(title) + 1));
+		MultiByteToWideChar(
+			CP_UTF8, 0, title, static_cast<int>(strlen(title) + 1), m_title, static_cast<int>(strlen(title) + 1)
+		);
 	}
 
 	Window::~Window()
@@ -64,7 +46,7 @@ namespace Jamlib
 	{
 		constexpr wchar_t className[] = L"Jamlib Window Class";
 
-		HINSTANCE hInstance = GetModuleHandle(nullptr);
+		const HINSTANCE hInstance = GetModuleHandle(nullptr);
 
 		WNDCLASS wc = {};
 		wc.lpfnWndProc = WindowProc;
@@ -72,10 +54,9 @@ namespace Jamlib
 		wc.lpszClassName = className;
 		RegisterClass(&wc);
 
-		GdiplusStartupInput gdiPlusStartupInput;
-		ULONG_PTR gdiPlusToken;
+		const GdiplusStartupInput gdiPlusStartupInput;
 
-		if (Gdiplus::GdiplusStartup(&gdiPlusToken, &gdiPlusStartupInput, nullptr) != Gdiplus::Ok)
+		if (Gdiplus::GdiplusStartup(&m_gdiPlusToken, &gdiPlusStartupInput, nullptr) != Gdiplus::Ok)
 		{
 			return;
 		}
@@ -91,12 +72,13 @@ namespace Jamlib
 			return;
 		}
 
-		ShowWindow(m_hwnd, 2);
+		ShowWindow(m_hwnd, 1);
+		UpdateWindow(m_hwnd);
 	}
 
 	void Window::Close()
 	{
-		// Cry
+		Gdiplus::GdiplusShutdown(m_gdiPlusToken);
 	}
 
 	void Window::BeginDrawing()
@@ -125,5 +107,33 @@ namespace Jamlib
 	bool Window::IsWindowReady() const
 	{
 		return m_hwnd != nullptr;
+	}
+
+	LRESULT Window::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (uMsg)
+		{
+			case WM_DESTROY:
+			{
+				PostQuitMessage(0);
+				return 0;
+			}
+			case WM_PAINT:
+			{
+				m_instance->BeginDrawing();
+				m_instance->Clear();
+
+				Graphics* graphics = m_instance->m_graphics;
+				m_instance->m_render(graphics);
+
+				m_instance->EndDrawing();
+				return 0;
+			}
+
+			default:
+			{
+				return DefWindowProc(hwnd, uMsg, wParam, lParam);
+			}
+		}
 	}
 }
