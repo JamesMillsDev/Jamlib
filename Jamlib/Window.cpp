@@ -6,12 +6,12 @@ namespace Jamlib
 {
 	shared_ptr<Window> Window::m_instance;
 
-	void Window::Deleter::operator()(Window* window) const
+	void Window::Deleter::operator()(const Window* window) const
 	{
 		delete window;
 	}
 
-	void Window::Create(const int w, const int h, const char* title, const Color clrColor, UpdateFnc updateFnc, RenderFnc renderFnc)
+	void Window::Create(const int w, const int h, const char* title, const Color clrColor, const UpdateFnc& updateFnc, const RenderFnc& renderFnc)
 	{
 		if (m_instance)
 		{
@@ -26,10 +26,11 @@ namespace Jamlib
 		return m_instance;
 	}
 
-	Window::Window(PrivateKey, const int w, const int h, const char* title, const Color clrColor, const UpdateFnc& updateFnc, const RenderFnc& renderFnc) :
+	Window::Window(PrivateKey, const int w, const int h, const char* title, const Color clrColor, UpdateFnc updateFnc,
+	               RenderFnc renderFnc) :
 		m_width{ w }, m_height{ h }, m_title{ new wchar_t[strlen(title) + 1] },
 		m_clrColor{ clrColor }, m_hwnd{ nullptr }, m_hdc{ nullptr }, m_ps{ }, m_gdiPlusToken{ 0 },
-		m_graphics{ nullptr }, m_update{ updateFnc }, m_render{ renderFnc }
+		m_graphics{ nullptr }, m_update{ std::move(updateFnc) }, m_render{ std::move(renderFnc) }
 	{
 		MultiByteToWideChar(
 			CP_UTF8, 0, title, static_cast<int>(strlen(title) + 1), m_title, static_cast<int>(strlen(title) + 1)
@@ -76,7 +77,7 @@ namespace Jamlib
 		UpdateWindow(m_hwnd);
 	}
 
-	void Window::Close()
+	void Window::Close() const
 	{
 		Gdiplus::GdiplusShutdown(m_gdiPlusToken);
 	}

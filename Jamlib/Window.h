@@ -7,7 +7,6 @@
 
 using std::function;
 using std::shared_ptr;
-using std::unique_ptr;
 using std::weak_ptr;
 
 using Gdiplus::Graphics;
@@ -21,6 +20,8 @@ namespace Jamlib
 
 	class Window
 	{
+		friend class Application;
+
 		struct PrivateKey
 		{
 			PrivateKey() = default;
@@ -28,30 +29,16 @@ namespace Jamlib
 
 		struct Deleter
 		{
-			void operator()(Window* window) const;
+			void operator()(const Window* window) const;
 		};
 
 	public:
-		static void Create(int w, int h, const char* title, Color clrColor, UpdateFnc updateFnc, RenderFnc renderFnc);
-
-		static weak_ptr<Window> Instance();
-
-	public:
-		Window(PrivateKey, int w, int h, const char* title, Color clrColor, const UpdateFnc& updateFnc, const RenderFnc& renderFnc);
+		Window(PrivateKey, int w, int h, const char* title, Color clrColor, UpdateFnc updateFnc,
+		       RenderFnc renderFnc);
 		~Window();
 
 		Window(const Window&) = delete;
 		Window(Window&&) = delete;
-
-	public:
-		void Open();
-		void Close();
-
-		void BeginDrawing();
-		void Clear() const;
-		void EndDrawing();
-
-		bool IsWindowReady() const;
 
 	public:
 		Window& operator=(const Window&) = delete;
@@ -61,6 +48,10 @@ namespace Jamlib
 		static shared_ptr<Window> m_instance;
 
 	private:
+		static void Create(int w, int h, const char* title, Color clrColor, const UpdateFnc& updateFnc, const RenderFnc& renderFnc);
+
+		static weak_ptr<Window> Instance();
+
 		static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	private:
@@ -79,6 +70,14 @@ namespace Jamlib
 		RenderFnc m_render;
 
 	private:
+		void Open();
+		void Close() const;
+
+		void BeginDrawing();
+		void Clear() const;
+		void EndDrawing();
+
+		bool IsWindowReady() const;
 
 	};
 }
